@@ -25,7 +25,7 @@ class SynterAgentSigner:
         Cryptographically signs an agent payload or tool call execution intent.
         """
         ts = timestamp if timestamp is not None else int(time.time())
-        canonical_data = json.dumps(payload, sort_keys=True)
+        canonical_data = self._canonicalize(payload)
         message = f"{agent_id}:{organization_id}:{ts}:{canonical_data}"
 
         signature = hmac.new(
@@ -56,14 +56,24 @@ class SynterAgentSigner:
         payload = envelope.get("payload")
         signature = envelope.get("signature")
 
-        if not all([agent_id, org_id, timestamp, payload, signature]):
+        if (
+            not isinstance(agent_id, str)
+            or not agent_id
+            or not isinstance(org_id, (int, str))
+            or isinstance(org_id, bool)
+            or not isinstance(timestamp, int)
+            or timestamp <= 0
+            or payload is None
+            or not isinstance(signature, str)
+            or not signature
+        ):
             return False, "INVALID_ENVELOPE: Missing required fields."
 
         current_ts = int(time.time())
         if abs(current_ts - timestamp) > max_age_seconds:
             return False, "REPLAY_ATTACK_PREVENTED: Timestamp outside acceptable window."
 
-        canonical_data = json.dumps(payload, sort_keys=True)
+        canonical_data = self._canonicalize(payload)
         message = f"{agent_id}:{org_id}:{timestamp}:{canonical_data}"
 
         expected_sig = hmac.new(
@@ -76,3 +86,6 @@ class SynterAgentSigner:
             return False, "SIGNATURE_MISMATCH: Payload has been tampered with or key is invalid."
 
         return True, None
+
+    def _canonicalize(self, value: Any) -> str:
+        return json.dumps(value, sort_keys=True)

@@ -1,6 +1,11 @@
 # 🎯 Detailed Use Cases for Synter Growth Agents & Agent Shield
 
-This guide details real-world use cases where growth teams, agencies, and performance marketers build custom Growth Agents using **Claude**, **OpenAI**, or **Synter Campaign IDE**, compile them using **Agent Shield**, and execute them safely.
+This guide shows how growth teams, agencies, and performance marketers can plug **Agent Shield** into broader runtimes built on **Claude**, **OpenAI**, or custom execution engines.
+
+Each example intentionally separates:
+
+1. the **growth runtime** that fetches metrics or executes actions, and
+2. the **Agent Shield role** that signs, verifies, scans, and policy-checks those actions.
 
 ---
 
@@ -9,15 +14,19 @@ This guide details real-world use cases where growth teams, agencies, and perfor
 ### Problem
 High-converting campaigns (e.g. Google PMax or Meta Retargeting) frequently get throttled by artificial daily budget caps or low max CPC bids, causing lost impression share (`Search Lost IS (Budget)` > 25%).
 
-### Solution
+### Runtime Flow
 An autonomous **CPA Defense Agent** monitors performance every 4 hours:
 1. Checks 7-day CPA against the client's Target CPA threshold.
 2. If CPA is 15%+ below Target CPA and Search Lost IS (Budget) > 10%, the agent uncaps daily budget by +20% steps.
 3. Automatically increases target ROAS / bid modifiers to win top ad auctions.
 
-### Agent Shield Security Enforcement
-* **Budget Step Caps**: `@synter/agent-shield` validates that no single action can increase budget by more than +30% per 24 hours.
-* **Payload Signing**: Every bid adjustment is signed with `SynterAgentSigner` to prevent replay attacks or unauthorized API mutations.
+### Agent Shield Role
+- `SynterAgentSigner` signs each budget mutation intent before the runtime forwards it.
+- `SynterExecutionGuard` verifies the signature freshness and can reject:
+  - actions outside an allowlist,
+  - a single budget increase above a configured threshold,
+  - or cumulative 24-hour budget increases above a configured threshold.
+- `SynterAuditTrail` can append the decision to a chained JSONL log.
 
 ---
 
@@ -26,14 +35,16 @@ An autonomous **CPA Defense Agent** monitors performance every 4 hours:
 ### Problem
 Ad platforms frequently optimize for cheap signup proxies (disposable emails, bot traffic) that never enter a credit card, inflating ad platform ROAS while trial MRR remains flat.
 
-### Solution
+### Runtime Flow
 A **Card-Backed Trial Growth Agent**:
 1. Connects ad platform campaigns with downstream product telemetry (Stripe / PostHog).
 2. Ranks ad groups by **Card-Backed Trial Start Rate** instead of raw account signups.
 3. Pauses ad sets where card conversion rate < 2.5% and reallocates budget to high-intent search keywords.
 
-### Agent Shield Security Enforcement
-* **Integrity Guard**: `SynterIntegrityGuard` verifies the SHA-256 manifest of the skill file (`card_backed_trial_optimizer.md`) to guarantee that prompt instructions cannot be altered or injected with malicious redirect URLs.
+### Agent Shield Role
+- `SynterIntegrityGuard` signs the protected agent directory at compile time.
+- The runtime re-verifies the manifest before loading the skill files so modified prompts, injected code, missing files, or newly added protected files are detected.
+- `SynterPromptSanitizer` can clean external copy before it enters the model context.
 
 ---
 
@@ -42,14 +53,16 @@ A **Card-Backed Trial Growth Agent**:
 ### Problem
 Capital gets trapped in underperforming Meta or LinkedIn ad sets while Google Search or Reddit ad sets are budget-starved and delivering 3x higher ROAS.
 
-### Solution
+### Runtime Flow
 A **Cross-Platform Pacing Agent**:
 1. Pulls 7-day cross-platform metrics across Google, Meta, LinkedIn, Reddit, X, and TikTok.
 2. Identifies channels exceeding blended ROAS targets.
 3. Decreases budget on underperforming channels by -15% and shifts capital to top-performing platforms in real-time.
 
-### Agent Shield Security Enforcement
-* **Prompt Sanitizer**: `SynterPromptSanitizer` cleans scraped landing page copy and external ad creative text to strip prompt injection patterns before feeding data into the LLM context.
+### Agent Shield Role
+- `SynterPromptSanitizer.inspectExternalText(...)` scans scraped landing pages, competitive ad copy, and analyst notes for prompt-injection-like patterns.
+- The runtime can store or review findings before allowing that text into LLM context.
+- `SynterExecutionGuard` can still gate the eventual reallocation action if the runtime emits signed budget updates.
 
 ---
 
@@ -58,14 +71,16 @@ A **Cross-Platform Pacing Agent**:
 ### Problem
 Browser-based ad pixels drop 20-30% of conversions due to ad blockers and iOS privacy restrictions, causing ad platforms to bid blindly.
 
-### Solution
+### Runtime Flow
 An **Offline Conversion Sync Agent**:
 1. Listens to Stripe `checkout.session.completed` and `customer.subscription.created` webhooks.
 2. Extracts Google `gclid`, Meta `fbp`/`fbc`, and Reddit `rdt_cid` click identifiers.
 3. Uploads verified conversion value directly to Google Ads CAPI, Meta CAPI, and Reddit CAPI.
 
-### Agent Shield Security Enforcement
-* **Signed Action Audit**: Every conversion upload is cryptographically signed and recorded in an immutable audit trail (`agent_tool_executions`).
+### Agent Shield Role
+- `SynterAgentSigner` signs the upload intent generated by the runtime.
+- `SynterExecutionGuard` can enforce an action allowlist so only approved upload actions are forwarded.
+- `SynterAuditTrail` can append each allow/deny decision to a chained local log for export into a broader audit system.
 
 ---
 
@@ -74,8 +89,8 @@ An **Offline Conversion Sync Agent**:
 ### Problem
 Marketing agencies managing 30+ client workspaces struggle to enforce brand guidelines and spend safety controls across multiple junior media buyers and AI tools.
 
-### Solution
-The agency builds client-specific Growth Agents in **Claude** or **OpenAI**, compiles each agent with `npx @synter/agent-shield compile`, and deploys them to Synter's 24/7 background execution engine.
+### Runtime Flow
+The agency builds client-specific Growth Agents in **Claude** or **OpenAI**, compiles each agent with `npx @synter/agent-shield compile`, and then hands the signed package to its execution runtime.
 
 ### Workflow
 ```bash
@@ -85,3 +100,14 @@ npx @synter/agent-shield compile ./agents/client-a-growth --secret $CLIENT_A_KEY
 # Compile Agency Client B Agent
 npx @synter/agent-shield compile ./agents/client-b-growth --secret $CLIENT_B_KEY
 ```
+
+### Agent Shield Role
+- The compiler scans protected files for suspicious prompt-injection-like content.
+- The signed manifest lets the agency runtime verify that each client’s protected files match what was reviewed and shipped.
+- The runtime can pair each client workspace with its own signing key and policy configuration.
+
+---
+
+## What Agent Shield Does Not Do By Itself
+
+Agent Shield does **not** fetch platform metrics, schedule agents, ingest Stripe or PostHog telemetry, upload conversions, or deploy agents to Synter. Those jobs belong to the surrounding runtime. Agent Shield supplies the local trust primitives that runtime calls before it executes sensitive actions.

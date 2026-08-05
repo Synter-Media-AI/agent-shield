@@ -28,7 +28,7 @@ export class SynterAgentSigner {
     timestamp?: number
   ): SignedPayloadEnvelope<T> {
     const ts = timestamp ?? Math.floor(Date.now() / 1000);
-    const canonicalPayload = JSON.stringify(payload, Object.keys(payload as object).sort());
+    const canonicalPayload = this.canonicalize(payload);
     const message = `${agentId}:${organizationId}:${ts}:${canonicalPayload}`;
 
     const signature = createHmac('sha256', this.secretKey)
@@ -53,7 +53,17 @@ export class SynterAgentSigner {
   ): { valid: boolean; error?: string } {
     const { agentId, organizationId, timestamp, payload, signature } = envelope;
 
-    if (!agentId || !organizationId || !timestamp || !payload || !signature) {
+    if (
+      typeof agentId !== 'string' ||
+      agentId.length === 0 ||
+      (typeof organizationId !== 'string' && typeof organizationId !== 'number') ||
+      typeof timestamp !== 'number' ||
+      timestamp <= 0 ||
+      payload === undefined ||
+      payload === null ||
+      typeof signature !== 'string' ||
+      signature.length === 0
+    ) {
       return { valid: false, error: 'INVALID_ENVELOPE: Missing required fields.' };
     }
 
@@ -62,7 +72,7 @@ export class SynterAgentSigner {
       return { valid: false, error: 'REPLAY_ATTACK_PREVENTED: Timestamp outside acceptable window.' };
     }
 
-    const canonicalPayload = JSON.stringify(payload, Object.keys(payload as object).sort());
+    const canonicalPayload = this.canonicalize(payload);
     const message = `${agentId}:${organizationId}:${timestamp}:${canonicalPayload}`;
 
     const expectedSig = createHmac('sha256', this.secretKey)
@@ -77,5 +87,26 @@ export class SynterAgentSigner {
     }
 
     return { valid: true };
+  }
+
+  private canonicalize(value: unknown): string {
+    return JSON.stringify(this.sortValue(value));
+  }
+
+  private sortValue(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map((entry) => this.sortValue(entry));
+    }
+
+    if (value && typeof value === 'object') {
+      return Object.keys(value as Record<string, unknown>)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, key) => {
+          acc[key] = this.sortValue((value as Record<string, unknown>)[key]);
+          return acc;
+        }, {});
+    }
+
+    return value;
   }
 }

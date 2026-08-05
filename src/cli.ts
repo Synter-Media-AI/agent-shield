@@ -1,6 +1,6 @@
 import { SynterIntegrityGuard } from './integrity.js';
 import { SynterPromptSanitizer } from './sanitizer.js';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
@@ -19,6 +19,27 @@ export function compileGrowthAgent(agentDir: string, secretKey: string): void {
   // 1. Check prompt injection in markdown and config files
   console.log('🔍 Step 1: Scanning for prompt injection vulnerabilities...');
   const guard = new SynterIntegrityGuard(secretKey);
+  const suspiciousFindings = guard
+    .listProtectedFiles(absoluteDir)
+    .flatMap((relativePath) => {
+      const fullPath = resolve(absoluteDir, relativePath);
+      const content = readFileSync(fullPath, 'utf-8');
+      const result = SynterPromptSanitizer.inspectExternalText(content);
+      return result.findings.map((finding) => ({
+        file: relativePath,
+        rule: finding.rule,
+        match: finding.match
+      }));
+    });
+
+  if (suspiciousFindings.length > 0) {
+    console.error('❌ Compile blocked: suspicious prompt-injection-like content found in protected files.');
+    for (const finding of suspiciousFindings) {
+      console.error(`   - ${finding.file} [${finding.rule}]: ${finding.match}`);
+    }
+    process.exit(1);
+  }
+
   const manifest = guard.generateManifest(absoluteDir);
 
   // 2. Generate signed manifest file
@@ -27,5 +48,5 @@ export function compileGrowthAgent(agentDir: string, secretKey: string): void {
 
   console.log(`✅ Step 2: Generated cryptographically signed manifest: ${sigPath}`);
   console.log(`🔒 Step 3: Verified ${manifest.fileCount} files with signature: ${manifest.signature.substring(0, 16)}...`);
-  console.log('🚀 Growth Agent successfully compiled to Synter Security Standard! Ready to run on Synter Engine.\n');
+  console.log('🚀 Growth Agent successfully compiled to the Agent Shield manifest format.\n');
 }

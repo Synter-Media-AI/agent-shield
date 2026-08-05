@@ -20,33 +20,7 @@ export class SynterIntegrityGuard {
    * Generates a cryptographic manifest of all files in a skills or MCP directory.
    */
   public generateManifest(directoryPath: string): SkillManifest {
-    const fileHashes: Record<string, string> = {};
-
-    const walk = (dir: string) => {
-      const entries = readdirSync(dir);
-      for (const entry of entries) {
-        if (entry.startsWith('.') || entry === 'node_modules' || entry === 'dist') continue;
-        const fullPath = join(dir, entry);
-        const stat = statSync(fullPath);
-
-        if (stat.isDirectory()) {
-          walk(fullPath);
-        } else if (stat.isFile() && /\.(md|py|json|ts|js)$/.test(entry)) {
-          const relPath = relative(directoryPath, fullPath).replace(/\\/g, '/');
-          const content = readFileSync(fullPath);
-          fileHashes[relPath] = createHash('sha256').update(content).digest('hex');
-        }
-      }
-    };
-
-    walk(directoryPath);
-
-    const sortedHashes = Object.keys(fileHashes)
-      .sort()
-      .reduce((acc, key) => {
-        acc[key] = fileHashes[key];
-        return acc;
-      }, {} as Record<string, string>);
+    const sortedHashes = this.collectFileHashes(directoryPath);
 
     const canonicalManifest = JSON.stringify(sortedHashes);
     const signature = createHmac('sha256', this.secretKey)
@@ -84,17 +58,24 @@ export class SynterIntegrityGuard {
       };
     }
 
+    const currentFileHashes = this.collectFileHashes(directoryPath);
+
     // 2. Check each file hash
     for (const [relPath, expectedHash] of Object.entries(fileHashes)) {
-      const fullPath = join(directoryPath, relPath);
-      try {
-        const content = readFileSync(fullPath);
-        const currentHash = createHash('sha256').update(content).digest('hex');
-        if (currentHash !== expectedHash) {
-          violations.push(`TAMPERED_FILE: File '${relPath}' has been modified or injected with untrusted code!`);
-        }
-      } catch {
+      const currentHash = currentFileHashes[relPath];
+      if (!currentHash) {
         violations.push(`MISSING_FILE: File '${relPath}' was deleted or moved.`);
+        continue;
+      }
+
+      if (currentHash !== expectedHash) {
+        violations.push(`TAMPERED_FILE: File '${relPath}' has been modified or injected with untrusted code!`);
+      }
+    }
+
+    for (const relPath of Object.keys(currentFileHashes)) {
+      if (!(relPath in fileHashes)) {
+        violations.push(`UNEXPECTED_FILE: File '${relPath}' was added after compilation.`);
       }
     }
 
@@ -102,5 +83,42 @@ export class SynterIntegrityGuard {
       valid: violations.length === 0,
       violations
     };
+  }
+
+  /**
+   * Lists the files that are protected by the integrity manifest.
+   */
+  public listProtectedFiles(directoryPath: string): string[] {
+    return Object.keys(this.collectFileHashes(directoryPath));
+  }
+
+  private collectFileHashes(directoryPath: string): Record<string, string> {
+    const fileHashes: Record<string, string> = {};
+
+    const walk = (dir: string) => {
+      const entries = readdirSync(dir);
+      for (const entry of entries) {
+        if (entry.startsWith('.') || entry === 'node_modules' || entry === 'dist') continue;
+        const fullPath = join(dir, entry);
+        const stat = statSync(fullPath);
+
+        if (stat.isDirectory()) {
+          walk(fullPath);
+        } else if (stat.isFile() && /\.(md|py|json|ts|js)$/.test(entry)) {
+          const relPath = relative(directoryPath, fullPath).replace(/\\/g, '/');
+          const content = readFileSync(fullPath);
+          fileHashes[relPath] = createHash('sha256').update(content).digest('hex');
+        }
+      }
+    };
+
+    walk(directoryPath);
+
+    return Object.keys(fileHashes)
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = fileHashes[key];
+        return acc;
+      }, {} as Record<string, string>);
   }
 }
