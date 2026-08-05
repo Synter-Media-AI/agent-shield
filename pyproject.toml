@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synter-agent-shield"
+version = "1.0.0"
+authors = [
+  { name="Synter Media AI", email="hello@syntermedia.ai" },
+]
+description = "Zero-dependency cryptographic security compiler & shield for AI Growth Agents"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+keywords = ["ai-agents", "security", "hmac", "prompt-injection", "synter", "mcp"]
+
+[project.urls]
+"Homepage" = "https://github.com/Synter-Media-AI/agent-shield"
+"Bug Tracker" = "https://github.com/Synter-Media-AI/agent-shield/issues"

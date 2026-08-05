@@ -1,0 +1,42 @@
+{
+  "name": "@synter/agent-shield",
+  "version": "1.0.0",
+  "description": "Zero-dependency cryptographic security compiler & shield for Synter Growth Agents",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "bin": {
+    "agent-shield": "bin/agent-shield.js",
+    "synter-shield": "bin/agent-shield.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/shield.test.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai-agents",
+    "growth-agents",
+    "mcp",
+    "security",
+    "agent-security",
+    "hmac-signing",
+    "prompt-injection",
+    "integrity",
+    "synter"
+  ],
+  "author": "Synter Media AI <hello@syntermedia.ai>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Synter-Media-AI/agent-shield.git"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
