@@ -1,29 +1,52 @@
 {
   "name": "@synter/agent-shield",
   "version": "1.0.0",
-  "description": "Zero-dependency cryptographic security compiler & shield for Synter Growth Agents",
+  "description": "Lightweight security helpers for signing, integrity manifests, prompt scanning, and execution policy checks",
   "main": "dist/index.js",
-  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "bin",
+    "dist/*.js",
+    "dist/*.d.ts",
+    "dist/*.js.map",
+    "dist/*.d.ts.map",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "VERSIONING.md",
+    "vectors/*.json"
+  ],
+  "publishConfig": { "access": "public" },
   "bin": {
     "agent-shield": "bin/agent-shield.js",
     "synter-shield": "bin/agent-shield.js"
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test dist/tests/shield.test.js",
+    "test": "npm run build && node --test dist/tests/shield.test.js",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
     "ai-agents",
-    "growth-agents",
-    "mcp",
     "security",
-    "agent-security",
-    "hmac-signing",
+    "hmac",
+    "signing",
     "prompt-injection",
     "integrity",
+    "manifest",
+    "execution-policy",
+    "prompt-sanitization",
+    "agent-security",
     "synter"
   ],
   "author": "Synter Media AI <hello@syntermedia.ai>",
@@ -36,6 +59,7 @@
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3"
   },
+  "dependencies": { "canonicalize": "^2.1.0" },
   "engines": {
     "node": ">=18.0.0"
   }
