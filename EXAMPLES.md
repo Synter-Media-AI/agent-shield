@@ -95,10 +95,10 @@ The agency builds client-specific Growth Agents in **Claude** or **OpenAI**, com
 ### Workflow
 ```bash
 # Compile Agency Client A Agent
-npx @synter/agent-shield compile ./agents/client-a-growth --secret $CLIENT_A_KEY
+CLIENT_A_KEY_FILE=/run/secrets/client-a SYNTER_MASTER_KEY_FILE=$CLIENT_A_KEY_FILE npx @synter/agent-shield compile ./agents/client-a-growth
 
 # Compile Agency Client B Agent
-npx @synter/agent-shield compile ./agents/client-b-growth --secret $CLIENT_B_KEY
+CLIENT_B_KEY_FILE=/run/secrets/client-b SYNTER_MASTER_KEY_FILE=$CLIENT_B_KEY_FILE npx @synter/agent-shield compile ./agents/client-b-growth
 ```
 
 ### Agent Shield Role

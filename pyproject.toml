@@ -13,12 +13,13 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "Topic :: Security",
 ]
 keywords = ["ai-agents", "security", "hmac", "signing", "integrity", "manifest", "prompt-injection", "policy", "synter"]
+dependencies = ["rfc8785>=0.1.4,<1"]
 
 [project.urls]
 "Homepage" = "https://github.com/Synter-Media-AI/agent-shield"

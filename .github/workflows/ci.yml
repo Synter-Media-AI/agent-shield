@@ -5,7 +5,10 @@ on:
   pull_request:
 
 jobs:
-  test:
+  node:
+    strategy:
+      matrix:
+        node: [18, 20]
     runs-on: ubuntu-latest
 
     steps:
@@ -15,7 +18,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node }}
           cache: npm
 
       - name: Install Node.js dependencies
@@ -24,16 +27,56 @@ jobs:
       - name: Run TypeScript build and tests
         run: npm test
 
+      - name: Build and smoke the real npm artifact
+        shell: bash
+        run: |
+          tarball="$(npm pack --silent)"
+          consumer="$(mktemp -d)"
+          fixture="$(mktemp -d)"
+          key_file="$(mktemp)"
+          printf '0123456789abcdef0123456789abcdef' > "$key_file"
+          printf '# fixture\n' > "$fixture/SKILL.md"
+          npm install --prefix "$consumer" "$PWD/$tarball"
+          (cd "$consumer" && node --input-type=module \
+            -e "import('@synter/agent-shield').then(m => { if (!m.SynterAgentSigner) process.exit(1) })")
+          SYNTER_MASTER_KEY_FILE="$key_file" \
+            "$consumer/node_modules/.bin/agent-shield" compile "$fixture"
+          test -s "$fixture/agent.growth.json.sig"
+
+  python:
+    strategy:
+      matrix:
+        python: ['3.8', '3.12']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
 
-      - name: Install Python build tooling
-        run: python -m pip install build
+      - name: Install project and Python build tooling
+        run: python -m pip install build .
 
       - name: Run Python tests
         run: python -m unittest discover -s synter_shield/tests
 
       - name: Build Python distribution artifacts
         run: python -m build --sdist --wheel
+
+      - name: Smoke wheel and source distribution in clean virtual environments
+        shell: bash
+        run: |
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            venv="$(mktemp -d)/venv"
+            python -m venv "$venv"
+            "$venv/bin/pip" install "$artifact"
+            "$venv/bin/python" - <<'PY'
+          import synter_shield
+          for name in synter_shield.__all__:
+              getattr(synter_shield, name)
+          signer = synter_shield.SynterAgentSigner("0123456789abcdef0123456789abcdef")
+          envelope = signer.sign_payload("agent", "org", {"action": "READ"})
+          assert signer.verify_signature(envelope)[0]
+          PY
+          done

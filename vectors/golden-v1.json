@@ -1,0 +1,26 @@
+{
+  "secret": "0123456789abcdef0123456789abcdef",
+  "numeric_cases": [
+    { "name": "negative zero", "value": -0.0, "canonical": "0" },
+    { "name": "decimal", "value": 1.5, "canonical": "1.5" },
+    { "name": "small exponent threshold", "value": 1e-7, "canonical": "1e-7" },
+    { "name": "small decimal threshold", "value": 1e-6, "canonical": "0.000001" },
+    { "name": "large decimal is outside v1 safe integer range", "value": 1e20, "accepted": false },
+    { "name": "large exponent is outside v1 safe integer range", "value": 1e21, "accepted": false },
+    { "name": "maximum safe integer", "value": 9007199254740991, "canonical": "9007199254740991" },
+    { "name": "minimum safe integer", "value": -9007199254740991, "canonical": "-9007199254740991" },
+    { "name": "positive unsafe integer", "value": 9007199254740992, "accepted": false },
+    { "name": "negative unsafe integer", "value": -9007199254740992, "accepted": false }
+  ],
+  "envelope": {
+    "schema_version": "1.0", "algorithm": "hmac-sha256", "agent_id": "agent:α", "organization_id": "org:東京", "timestamp": 1700000000,
+    "payload": { "action": "SET_BUDGET", "campaign_id": "cmp:一", "current_budget": 100, "proposed_budget": 120, "nested": { "emoji": "🛡️", "items": [true, null, 1.5] } },
+    "signature": "ff54783b1105ccab4dabd97a11d1cd0272ee44fda98bd0b2f77d962e71bad23c"
+  },
+  "manifest_files": { "fixture.json": "{\"hello\":\"世界\"}\n" },
+  "manifest": {
+    "schema_version": "1.0", "algorithm": "hmac-sha256", "file_count": 1,
+    "file_hashes": { "fixture.json": "67c3b86b561cd601eae2a54045f423dd9ec1f0c97f81be010cb2016ebb4154b0" },
+    "signature": "1a021c4f957e148751f51bc2db5faf78cdfb91775e41810a5e8d9c1939f1f11f"
+  }
+}

@@ -33,3 +33,5 @@ The following require a major version bump:
 
 - Pin exact versions if your runtime depends on specific sanitizer findings or violation text.
 - Prefer consuming structured fields over parsing human-readable error strings.
+- Envelope and manifest `schema_version` are `"1.0"` and are independent of package version `1.0.0`.
+- Wire fields, JCS/domain bytes, signature encoding, 30-second future skew, JSON limits, and default budget-action semantics are compatibility-sensitive and require a major release to change incompatibly.

@@ -19,3 +19,6 @@ All notable changes to this project should be documented in this file.
 - Repositioned the project docs around its real scope as an embeddable security toolkit.
 - Updated the CLI compile flow to inspect protected files before manifest generation.
 - Tightened examples so they distinguish Agent Shield from the surrounding growth runtime.
+- Finalized one cross-language JCS, domain-separated, snake_case envelope and manifest contract with shared golden vectors.
+- Made configured budget mutations, manifests, symlink handling, malformed external input, and keyed local audit fail closed.
+- Corrected npm/PyPI dependencies, exports, public npm access, packaging smoke checks, and minimum-runtime CI.

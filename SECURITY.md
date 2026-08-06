@@ -27,3 +27,7 @@ When reporting issues, keep the project’s scope in mind:
 - Manifest verification here proves file-content consistency against a signed manifest, not artifact provenance.
 - Prompt sanitization is heuristic and may have false positives or false negatives.
 - Execution policy helpers return decisions, but the host runtime remains responsible for enforcement.
+- Timestamp checks provide freshness, not replay prevention; hosts must atomically deduplicate accepted signatures.
+- Policy and integrity checks are subject to TOCTOU unless the host checks immediately before use.
+- Local audit requires one writer per file and cannot reveal tail truncation/deletion, replacement, or compromise of its HMAC key.
+- Deliver 32-byte-or-longer keys through environment variables populated by a secret manager or protected files, never CLI arguments or logs.
