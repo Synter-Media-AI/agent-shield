@@ -9,11 +9,12 @@ authors = [
   { name="Synter Media AI", email="hello@syntermedia.ai" },
 ]
 description = "Lightweight security helpers for signing, integrity manifests, prompt scanning, and execution policy checks"
-license = "MIT"
+license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
     "Topic :: Security",
