@@ -50,15 +50,15 @@ jobs:
         run: python -m unittest discover -s synter_shield/tests
 
       - name: Build Python distribution artifacts
-        run: python -m build --sdist --wheel
+        run: python -m build --sdist --wheel --outdir python-dist
 
       - name: Verify Python distribution metadata
-        run: python -m twine check dist/*
+        run: python -m twine check python-dist/*
 
       - name: Smoke test installed Python wheel
         run: |
           python -m venv /tmp/agent-shield-python-smoke
-          /tmp/agent-shield-python-smoke/bin/pip install dist/*.whl
+          /tmp/agent-shield-python-smoke/bin/pip install python-dist/*.whl
           cd /tmp
           /tmp/agent-shield-python-smoke/bin/python -c "from synter_shield import SynterAgentSigner; assert SynterAgentSigner('0123456789abcdef0123456789abcdef').sign_payload('agent', 1, {})['signature']"
 
