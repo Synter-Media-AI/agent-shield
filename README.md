@@ -16,7 +16,7 @@ It gives your runtime several concrete building blocks:
 
 - sign execution intents before a runtime forwards them to ad-platform or backend APIs;
 - generate and verify signed manifests for agent skill directories;
-- scan and redact prompt-injection-like patterns in external text and protected files;
+- scan and redact prompt-injection-like patterns in external text and agent files;
 - enforce simple runtime policy checks such as per-action allowlists and budget step caps.
 
 `agent-shield` is a library, not a scheduler, ad-platform SDK, webhook worker, or deployment engine. It is designed to plug into a broader execution runtime.
@@ -27,8 +27,8 @@ It gives your runtime several concrete building blocks:
 - 🔍 **Skill Manifest Integrity Guard**: Detect tampering, missing files, and unexpected files in protected agent directories via `SynterIntegrityGuard`.
 - 🧹 **Prompt Injection Shield**: Inspect and redact prompt-injection-like patterns before external content enters LLM context via `SynterPromptSanitizer`.
 - ⚖️ **Runtime Execution Policy**: Enforce action allowlists, signature age limits, and budget increase caps via `SynterExecutionGuard`.
-- 🧾 **Tamper-Evident Local Audit Trail**: Append decision records to a hash-linked JSONL ledger via `SynterAuditTrail`.
-- ⚙️ **CLI Agent Compiler**: Scan protected files and emit a signed `agent.growth.json.sig` manifest.
+- 🧾 **Authenticated Local Audit Trail**: Append decision records to an HMAC-authenticated, hash-linked JSONL ledger via `SynterAuditTrail`.
+- ⚙️ **CLI Agent Compiler**: Scan agent files and emit a signed `agent.growth.json.sig` manifest.
 
 ## What It Does Not Do
 
@@ -60,11 +60,14 @@ pip install synter-agent-shield
 
 ### 1. Compile an Agent Directory (CLI)
 
-Compile any agent directory into a signed manifest after scanning protected files for suspicious prompt-injection-like content:
+Compile any agent directory into a signed manifest after scanning agent files for suspicious prompt-injection-like content:
 
 ```bash
-npx @synter/agent-shield compile ./my-growth-agent --secret "your_master_secret_key"
+SYNTER_MASTER_KEY="$(your-secret-manager read agent-shield)" \
+  npx @synter/agent-shield compile ./my-growth-agent
 ```
+
+Prefer injecting `SYNTER_MASTER_KEY` from a secret manager. The `--secret` option is intended for local development because command-line arguments may be retained in shell history or visible to other processes.
 
 Output:
 ```
@@ -75,7 +78,7 @@ Output:
 🚀 Growth Agent successfully compiled to the Agent Shield manifest format.
 ```
 
-If the compiler finds suspicious patterns in protected files, it blocks compilation and prints the file path, rule name, and matched text.
+If the compiler finds suspicious patterns in agent files, it blocks compilation and prints the file path, rule name, and matched text.
 
 ---
 
@@ -163,7 +166,7 @@ signed = signer.sign_payload("agent-007", 4328, {
     "proposed_budget": 120.0,
 })
 
-allowed, violations, increase = execution_guard.authorize(signed)
+allowed, violations, increase = execution_guard.authorize(signed, recent_budget_changes=[])
 print(allowed, violations, increase)
 ```
 
@@ -188,7 +191,7 @@ console.log(cleanText);
 ```typescript
 import { SynterAuditTrail } from '@synter/agent-shield';
 
-const trail = new SynterAuditTrail();
+const trail = new SynterAuditTrail(process.env.SYNTER_AUDIT_KEY!);
 trail.appendEntry('./logs/agent-actions.jsonl', {
   agentId: 'claude-growth-agent-1',
   organizationId: 'org-4328',
@@ -199,6 +202,11 @@ trail.appendEntry('./logs/agent-actions.jsonl', {
 
 const verification = trail.verify('./logs/agent-actions.jsonl');
 console.log(verification.valid);
+
+// Persist this outside the ledger (for example in immutable object metadata)
+// and supply it to verify() later to detect truncation or prefix rollback.
+const checkpoint = trail.getCheckpoint('./logs/agent-actions.jsonl');
+const rollbackSafeVerification = trail.verify('./logs/agent-actions.jsonl', checkpoint);
 ```
 
 ---
@@ -207,11 +215,14 @@ console.log(verification.valid);
 
 Agent Shield is designed for application-layer trust controls inside a larger runtime.
 
-- `SynterAgentSigner` provides shared-secret authenticity and tamper detection between systems that already trust the same secret.
-- `SynterIntegrityGuard` proves that a directory still matches a signed manifest produced earlier with the same secret.
+- `SynterAgentSigner` provides shared-secret authenticity, tamper detection, and a bounded freshness window between systems that already trust the same secret. Envelopes older than the configured age or more than 30 seconds in the future are rejected. The host must still deduplicate a signature or business idempotency key during that window before executing any non-idempotent action.
+- `SynterIntegrityGuard` proves that a directory still matches a signed manifest produced earlier with the same secret. It protects every regular file, including hidden configuration, dependencies, and executable scripts, except the generated root `agent.growth.json.sig` file. Signed metadata includes the manifest algorithm, version, file count, and file hashes; symlink roots, symlink entries, and non-regular files are rejected.
 - `SynterPromptSanitizer` is heuristic and rule-based; findings reduce risk but do not certify safety.
 - `SynterExecutionGuard` produces allow/deny decisions with reasons; it is not a sandbox and does not enforce anything by itself.
-- `SynterAuditTrail` provides tamper-evident local chaining, not immutable storage. If you need stronger guarantees, export entries to durable append-only infrastructure.
+- An explicit empty action allowlist denies every action; omitting the allowlist uses the explicit `"*"` default. Budget increases require an explicit history array/list—use an empty collection only after a successful history lookup found no prior changes.
+- `SynterAuditTrail` uses keyed HMAC digests plus hash chaining and authenticates the existing chain before each append. It assumes one writer per ledger. HMAC alone cannot reveal deletion of the whole ledger or replacement with a previously valid prefix; persist `getCheckpoint()` results outside the ledger and pass the expected checkpoint to `verify()` when rollback detection is required. For stronger guarantees, export entries to durable append-only infrastructure.
+
+Use separate secrets for intent signing, manifest signing, and audit authentication. Store them in a KMS or secret manager, scope access to the minimum required component, and rotate them according to your incident-response policy.
 
 ## Scope And Non-Goals
 

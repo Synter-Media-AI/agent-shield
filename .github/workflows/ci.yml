@@ -24,16 +24,76 @@ jobs:
       - name: Run TypeScript build and tests
         run: npm test
 
+      - name: Verify npm package contents
+        run: npm pack --dry-run
+
+      - name: Smoke test installed npm package
+        run: |
+          mkdir -p /tmp/agent-shield-npm /tmp/agent-shield-npm-smoke
+          npm pack --pack-destination /tmp/agent-shield-npm
+          cd /tmp/agent-shield-npm-smoke
+          npm init -y
+          npm install /tmp/agent-shield-npm/*.tgz
+          node --input-type=module -e "import { SynterAgentSigner } from '@synter/agent-shield'; if (!new SynterAgentSigner('smoke').signPayload('agent', 1, {}).signature) process.exit(1)"
+          ./node_modules/.bin/agent-shield
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install Python build tooling
-        run: python -m pip install build
+        run: python -m pip install build twine
 
       - name: Run Python tests
         run: python -m unittest discover -s synter_shield/tests
 
       - name: Build Python distribution artifacts
         run: python -m build --sdist --wheel
+
+      - name: Verify Python distribution metadata
+        run: python -m twine check dist/*
+
+      - name: Smoke test installed Python wheel
+        run: |
+          python -m venv /tmp/agent-shield-python-smoke
+          /tmp/agent-shield-python-smoke/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/agent-shield-python-smoke/bin/python -c "from synter_shield import SynterAgentSigner; assert SynterAgentSigner('smoke').sign_payload('agent', 1, {})['signature']"
+
+  python-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.13']
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run Python tests
+        run: python -m unittest discover -s synter_shield/tests
+
+  node-18-compatibility:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test

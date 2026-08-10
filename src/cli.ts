@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 /**
  * CLI Compiler for Synter Growth Agents.
- * Usage: npx @synter/agent-shield compile <agent-dir> --secret <key>
+ * Usage: SYNTER_MASTER_KEY=<key> npx @synter/agent-shield compile <agent-dir>
  */
 export function compileGrowthAgent(agentDir: string, secretKey: string): void {
   const absoluteDir = resolve(agentDir);
@@ -16,7 +16,7 @@ export function compileGrowthAgent(agentDir: string, secretKey: string): void {
     process.exit(1);
   }
 
-  // 1. Check prompt injection in markdown and config files
+  // 1. Check prompt injection in text-based agent and config files
   console.log('🔍 Step 1: Scanning for prompt injection vulnerabilities...');
   const guard = new SynterIntegrityGuard(secretKey);
   const suspiciousFindings = guard
@@ -33,7 +33,7 @@ export function compileGrowthAgent(agentDir: string, secretKey: string): void {
     });
 
   if (suspiciousFindings.length > 0) {
-    console.error('❌ Compile blocked: suspicious prompt-injection-like content found in protected files.');
+    console.error('❌ Compile blocked: suspicious prompt-injection-like content found in agent files.');
     for (const finding of suspiciousFindings) {
       console.error(`   - ${finding.file} [${finding.rule}]: ${finding.match}`);
     }

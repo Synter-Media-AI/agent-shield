@@ -1,9 +1,8 @@
 {
   "name": "@synter/agent-shield",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Lightweight security helpers for signing, integrity manifests, prompt scanning, and execution policy checks",
   "main": "dist/index.js",
-  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "type": "module",
   "exports": {

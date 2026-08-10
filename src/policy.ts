@@ -15,6 +15,7 @@ export interface BudgetChangeEvent {
 
 export interface ExecutionPolicy {
   allowedActions?: string[];
+  budgetMutationActions?: string[];
   maxSignatureAgeSeconds?: number;
   maxSingleBudgetIncreasePercent?: number;
   maxCumulativeBudgetIncreasePercent24h?: number;
@@ -31,7 +32,8 @@ export interface ExecutionDecision {
 }
 
 const DEFAULT_POLICY: Required<ExecutionPolicy> = {
-  allowedActions: [],
+  allowedActions: ['*'],
+  budgetMutationActions: ['UNCAP_BUDGET', 'UPDATE_BUDGET', 'SET_BUDGET', 'INCREASE_BUDGET'],
   maxSignatureAgeSeconds: 300,
   maxSingleBudgetIncreasePercent: 30,
   maxCumulativeBudgetIncreasePercent24h: 30
@@ -43,11 +45,14 @@ export class SynterExecutionGuard {
 
   constructor(secretKey: string, policy: ExecutionPolicy = {}) {
     this.signer = new SynterAgentSigner(secretKey);
+    this.validateRawPolicy(policy);
     this.policy = {
       ...DEFAULT_POLICY,
       ...policy,
-      allowedActions: policy.allowedActions ?? DEFAULT_POLICY.allowedActions
+      allowedActions: [...new Set(policy.allowedActions ?? DEFAULT_POLICY.allowedActions)],
+      budgetMutationActions: [...new Set(policy.budgetMutationActions ?? DEFAULT_POLICY.budgetMutationActions)]
     };
+    this.validatePolicy();
   }
 
   /**
@@ -69,11 +74,11 @@ export class SynterExecutionGuard {
     const violations: string[] = [];
     const action = this.extractAction(envelope.payload);
 
-    if (this.policy.allowedActions.length > 0 && !this.policy.allowedActions.includes(action)) {
+    if (!this.policy.allowedActions.includes('*') && !this.policy.allowedActions.includes(action)) {
       violations.push(`ACTION_NOT_ALLOWED: Action '${action}' is not permitted by policy.`);
     }
 
-    const budgetDecision = this.evaluateBudgetMutation(envelope.payload, context.recentBudgetChanges ?? []);
+    const budgetDecision = this.evaluateBudgetMutation(envelope.payload, context?.recentBudgetChanges);
     violations.push(...budgetDecision.violations);
 
     return {
@@ -89,16 +94,28 @@ export class SynterExecutionGuard {
 
   private evaluateBudgetMutation(
     payload: Record<string, unknown>,
-    recentBudgetChanges: BudgetChangeEvent[]
+    recentBudgetChanges: unknown
   ): { violations: string[]; budgetIncreasePercent?: number } {
-    if (!this.isBudgetMutationPayload(payload)) {
+    if (!this.looksLikeBudgetMutation(payload)) {
       return { violations: [] };
+    }
+
+    if (!this.isBudgetMutationPayload(payload)) {
+      return {
+        violations: [
+          'INVALID_BUDGET_MUTATION: Budget actions require a non-empty campaignId and finite currentBudget and proposedBudget values.'
+        ]
+      };
     }
 
     if (payload.currentBudget <= 0) {
       return {
         violations: ['INVALID_BUDGET_BASELINE: currentBudget must be greater than zero for policy enforcement.']
       };
+    }
+
+    if (payload.proposedBudget < 0) {
+      return { violations: ['INVALID_BUDGET_MUTATION: proposedBudget must be greater than or equal to zero.'] };
     }
 
     if (payload.proposedBudget <= payload.currentBudget) {
@@ -112,6 +129,15 @@ export class SynterExecutionGuard {
       violations.push(
         `BUDGET_STEP_CAP_EXCEEDED: Proposed increase of ${budgetIncreasePercent.toFixed(2)}% exceeds the ${this.policy.maxSingleBudgetIncreasePercent}% single-action cap.`
       );
+    }
+
+    if (!Array.isArray(recentBudgetChanges)) {
+      violations.push('INVALID_BUDGET_HISTORY: recentBudgetChanges must be supplied as an array for budget increases.');
+      return { violations, budgetIncreasePercent };
+    }
+    if (recentBudgetChanges.some((change) => !this.isValidBudgetChangeEvent(change))) {
+      violations.push('INVALID_BUDGET_HISTORY: recentBudgetChanges contains a malformed event.');
+      return { violations, budgetIncreasePercent };
     }
 
     const windowStart = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
@@ -138,8 +164,82 @@ export class SynterExecutionGuard {
     return (
       typeof candidate.action === 'string' &&
       typeof candidate.campaignId === 'string' &&
+      candidate.campaignId.length > 0 &&
       typeof candidate.currentBudget === 'number' &&
-      typeof candidate.proposedBudget === 'number'
+      Number.isFinite(candidate.currentBudget) &&
+      typeof candidate.proposedBudget === 'number' &&
+      Number.isFinite(candidate.proposedBudget)
     );
+  }
+
+  private looksLikeBudgetMutation(payload: Record<string, unknown>): boolean {
+    return (
+      (typeof payload.action === 'string' && /BUDGET/i.test(payload.action)) ||
+      (typeof payload.action === 'string' && this.policy.budgetMutationActions.includes(payload.action)) ||
+      'currentBudget' in payload ||
+      'proposedBudget' in payload
+    );
+  }
+
+  private isValidBudgetChangeEvent(change: unknown): change is BudgetChangeEvent {
+    if (!change || typeof change !== 'object' || Array.isArray(change)) {
+      return false;
+    }
+    const candidate = change as Record<string, unknown>;
+    return (
+      typeof candidate.campaignId === 'string' &&
+      candidate.campaignId.length > 0 &&
+      typeof candidate.timestamp === 'number' &&
+      Number.isSafeInteger(candidate.timestamp) &&
+      candidate.timestamp > 0 &&
+      typeof candidate.percentIncrease === 'number' &&
+      Number.isFinite(candidate.percentIncrease) &&
+      candidate.percentIncrease >= 0
+    );
+  }
+
+  private validatePolicy(): void {
+    if (
+      !Array.isArray(this.policy.allowedActions) ||
+      this.policy.allowedActions.some((action) => typeof action !== 'string' || action.length === 0)
+    ) {
+      throw new Error("SynterExecutionGuard policy field 'allowedActions' must contain only non-empty strings.");
+    }
+    if (this.policy.budgetMutationActions.some((action) => typeof action !== 'string' || action.length === 0)) {
+      throw new Error("SynterExecutionGuard policy field 'budgetMutationActions' must contain only non-empty strings.");
+    }
+
+    for (const [key, value] of Object.entries({
+      maxSignatureAgeSeconds: this.policy.maxSignatureAgeSeconds,
+      maxSingleBudgetIncreasePercent: this.policy.maxSingleBudgetIncreasePercent,
+      maxCumulativeBudgetIncreasePercent24h: this.policy.maxCumulativeBudgetIncreasePercent24h
+    })) {
+      if (!Number.isFinite(value) || value < 0) {
+        throw new Error(`SynterExecutionGuard policy field '${key}' must be a finite number greater than or equal to zero.`);
+      }
+    }
+  }
+
+  private validateRawPolicy(policy: ExecutionPolicy): void {
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+      throw new Error('SynterExecutionGuard policy must be an object.');
+    }
+    const supportedKeys = new Set([
+      'allowedActions', 'budgetMutationActions', 'maxSignatureAgeSeconds',
+      'maxSingleBudgetIncreasePercent', 'maxCumulativeBudgetIncreasePercent24h'
+    ]);
+    if (Object.keys(policy).some((key) => !supportedKeys.has(key))) {
+      throw new Error('SynterExecutionGuard policy contains an unsupported field.');
+    }
+    for (const [key, actions] of Object.entries({
+      allowedActions: policy.allowedActions,
+      budgetMutationActions: policy.budgetMutationActions
+    })) {
+      if (actions !== undefined && (
+        !Array.isArray(actions) || actions.some((action) => typeof action !== 'string' || action.length === 0)
+      )) {
+        throw new Error(`SynterExecutionGuard policy field '${key}' must contain only non-empty strings.`);
+      }
+    }
   }
 }

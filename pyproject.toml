@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synter-agent-shield"
-version = "1.0.0"
+version = "2.0.0"
 authors = [
   { name="Synter Media AI", email="hello@syntermedia.ai" },
 ]

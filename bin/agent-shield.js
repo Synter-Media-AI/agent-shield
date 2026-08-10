@@ -13,8 +13,8 @@ if (command === 'compile') {
   compileGrowthAgent(dir, secret);
 } else {
   console.log(`
-🛡️  Synter Agent Shield CLI (v1.0.0)
+🛡️  Synter Agent Shield CLI (v2.0.0)
 Commands:
-  npx @synter/agent-shield compile <dir> --secret <key>   Scan protected files and emit a signed manifest
+  SYNTER_MASTER_KEY=<key> npx @synter/agent-shield compile <dir>   Scan agent files and emit a signed manifest
   `);
 }

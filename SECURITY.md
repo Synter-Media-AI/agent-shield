@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Security fixes are supported for the latest published `1.x` release.
+Security fixes are supported for the latest published release.
 
 Because this project is still small and evolving, older releases may not receive backported fixes.
 
