@@ -17,8 +17,8 @@ class SynterAuditTrail:
     }
 
     def __init__(self, secret_key: str):
-        if not secret_key or not secret_key.strip():
-            raise ValueError("SynterAuditTrail requires a non-empty secret key.")
+        if not isinstance(secret_key, str) or len(secret_key.encode("utf-8")) < 32:
+            raise ValueError("SynterAuditTrail requires a secret key containing at least 32 UTF-8 bytes.")
         self.secret_key = secret_key.encode("utf-8")
 
     def append_entry(

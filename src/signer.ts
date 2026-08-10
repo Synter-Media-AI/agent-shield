@@ -15,8 +15,8 @@ export class SynterAgentSigner {
   private readonly secretKey: Buffer;
 
   constructor(secretKey: string) {
-    if (!secretKey || secretKey.trim().length === 0) {
-      throw new Error('SynterAgentSigner requires a non-empty secret key.');
+    if (typeof secretKey !== 'string' || Buffer.byteLength(secretKey, 'utf-8') < 32) {
+      throw new Error('SynterAgentSigner requires a secret key containing at least 32 UTF-8 bytes.');
     }
     this.validateUnicode(secretKey);
     this.secretKey = Buffer.from(secretKey, 'utf-8');

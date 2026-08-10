@@ -9,9 +9,14 @@ import { SynterPromptSanitizer } from '../sanitizer.js';
 import { SynterExecutionGuard } from '../policy.js';
 import { SynterAuditTrail } from '../audit.js';
 
+const TEST_SECRET = 'test_master_key_123_0123456789abcdef';
+const VECTOR_SECRET = 'vector-key-0123456789abcdef0123456789';
+const CORRECT_AUDIT_SECRET = 'correct-key-0123456789abcdef0123456789';
+const WRONG_AUDIT_SECRET = 'wrong-key-0123456789abcdef01234567890';
+
 describe('SynterAgentSigner', () => {
   it('should sign and verify valid payload', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
+    const signer = new SynterAgentSigner(TEST_SECRET);
     const payload = { action: 'UNCAP_BUDGET', campaignId: 'pmax-1', budget: 150 };
 
     const signed = signer.signPayload('agent-007', 4328, payload);
@@ -23,7 +28,7 @@ describe('SynterAgentSigner', () => {
   });
 
   it('should produce stable signatures for nested payloads with different key order', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
+    const signer = new SynterAgentSigner(TEST_SECRET);
     const timestamp = 1_723_000_000;
     const first = signer.signPayload('agent-007', 4328, {
       action: 'UPLOAD_CONVERSION',
@@ -44,7 +49,7 @@ describe('SynterAgentSigner', () => {
   });
 
   it('should verify signed envelopes with empty payload objects', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
+    const signer = new SynterAgentSigner(TEST_SECRET);
     const signed = signer.signPayload('agent-007', 0, {}, Math.floor(Date.now() / 1000));
 
     const verification = signer.verifySignature(signed);
@@ -52,7 +57,7 @@ describe('SynterAgentSigner', () => {
   });
 
   it('should reject tampered payload', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
+    const signer = new SynterAgentSigner(TEST_SECRET);
     const payload = { action: 'UNCAP_BUDGET', campaignId: 'pmax-1', budget: 150 };
 
     const signed = signer.signPayload('agent-007', 4328, payload);
@@ -65,7 +70,7 @@ describe('SynterAgentSigner', () => {
   });
 
   it('should reject envelopes signed with timestamps too far in the future', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
+    const signer = new SynterAgentSigner(TEST_SECRET);
     const signed = signer.signPayload(
       'agent-007',
       4328,
@@ -79,16 +84,16 @@ describe('SynterAgentSigner', () => {
   });
 
   it('should use an unambiguous cross-language signature protocol', () => {
-    const signer = new SynterAgentSigner('vector-key');
+    const signer = new SynterAgentSigner(VECTOR_SECRET);
     const first = signer.signPayload('a:b', 'c', { action: 'TEST', value: 1 }, 1_723_000_000);
     const second = signer.signPayload('a', 'b:c', { action: 'TEST', value: 1 }, 1_723_000_000);
 
-    assert.strictEqual(first.signature, '6d8f3e0aa4740026f86b9051b9646fc3bad9a6312a121e38ebff793cebb0aa56');
+    assert.strictEqual(first.signature, '2ebf1273636c986d914043eaf2a0a60877767078f5010e6c11dc07cde52f2e70');
     assert.notStrictEqual(first.signature, second.signature);
   });
 
   it('should sign __proto__ as ordinary payload data and reject malformed verification inputs', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
+    const signer = new SynterAgentSigner(TEST_SECRET);
     const payload = JSON.parse('{"__proto__":{"admin":false},"action":"TEST"}');
     const signed = signer.signPayload('agent-007', 4328, payload);
     signed.payload.__proto__.admin = true;
@@ -99,14 +104,14 @@ describe('SynterAgentSigner', () => {
   });
 
   it('should enforce the shared value domain and exact envelope shape', () => {
-    const signer = new SynterAgentSigner('vector-key');
+    const signer = new SynterAgentSigner(VECTOR_SECRET);
     const signed = signer.signPayload('unicode-雪', 'org', {
       label: 'café', negativeZero: -0, largeDouble: 9_007_199_254_740_992
     }, 1_723_000_000);
 
     assert.strictEqual(
       signed.signature,
-      '733cfcaddc8835e358a1a600091b00181a0c351e69896e4526d29cdef535b68c'
+      '7273fe96f5ae22cef32003c0c800687f0ace3e4abb2ad62ace692021e9b06c60'
     );
     assert.strictEqual(signer.verifySignature({ ...signed, approved: true }).valid, false);
     assert.throws(() => signer.signPayload('agent', 1, null), /must not be null/);
@@ -118,6 +123,11 @@ describe('SynterAgentSigner', () => {
       payload: { bad: '\ud800' }, signature: '0'.repeat(64)
     };
     assert.strictEqual(signer.verifySignature(malformed).valid, false);
+  });
+
+  it('should reject secrets shorter than 32 UTF-8 bytes', () => {
+    assert.throws(() => new SynterAgentSigner('a'.repeat(31)), /at least 32 UTF-8 bytes/);
+    assert.doesNotThrow(() => new SynterAgentSigner('雪'.repeat(11)));
   });
 });
 
@@ -143,11 +153,16 @@ describe('SynterPromptSanitizer', () => {
 });
 
 describe('SynterIntegrityGuard', () => {
+  it('should reject secrets shorter than 32 UTF-8 bytes', () => {
+    assert.throws(() => new SynterIntegrityGuard('a'.repeat(31)), /at least 32 UTF-8 bytes/);
+    assert.doesNotThrow(() => new SynterIntegrityGuard('雪'.repeat(11)));
+  });
+
   it('should detect unexpected files added after compilation', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-integrity-'));
     try {
       writeFileSync(join(fixtureDir, 'agent.md'), '# Safe agent\n', 'utf-8');
-      const guard = new SynterIntegrityGuard('test_master_key_123');
+      const guard = new SynterIntegrityGuard(TEST_SECRET);
       const manifest = guard.generateManifest(fixtureDir);
 
       writeFileSync(join(fixtureDir, 'backdoor.js'), 'console.log("surprise")\n', 'utf-8');
@@ -164,7 +179,7 @@ describe('SynterIntegrityGuard', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-integrity-'));
     try {
       writeFileSync(join(fixtureDir, 'agent.md'), '# Safe agent\n', 'utf-8');
-      const guard = new SynterIntegrityGuard('test_master_key_123');
+      const guard = new SynterIntegrityGuard(TEST_SECRET);
       const manifest = guard.generateManifest(fixtureDir);
       manifest.fileCount = 999;
 
@@ -182,7 +197,7 @@ describe('SynterIntegrityGuard', () => {
       const outsideFile = join(fixtureDir, '..', `outside-${Date.now()}.md`);
       writeFileSync(outsideFile, '# External content\n', 'utf-8');
       symlinkSync(outsideFile, join(fixtureDir, 'linked.md'));
-      const guard = new SynterIntegrityGuard('test_master_key_123');
+      const guard = new SynterIntegrityGuard(TEST_SECRET);
 
       assert.throws(() => guard.generateManifest(fixtureDir), /does not allow symlinks/);
       rmSync(outsideFile, { force: true });
@@ -195,7 +210,7 @@ describe('SynterIntegrityGuard', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-integrity-'));
     try {
       writeFileSync(join(fixtureDir, 'runner.sh'), '#!/bin/sh\necho safe\n', 'utf-8');
-      const guard = new SynterIntegrityGuard('test_master_key_123');
+      const guard = new SynterIntegrityGuard(TEST_SECRET);
       const manifest = guard.generateManifest(fixtureDir);
       assert.ok('runner.sh' in manifest.fileHashes);
 
@@ -214,7 +229,7 @@ describe('SynterIntegrityGuard', () => {
     try {
       writeFileSync(join(fixtureDir, 'agent.md'), '# Safe agent\n', 'utf-8');
       symlinkSync(fixtureDir, linkedRoot);
-      const guard = new SynterIntegrityGuard('test_master_key_123');
+      const guard = new SynterIntegrityGuard(TEST_SECRET);
       assert.throws(() => guard.generateManifest(linkedRoot), /non-symlink directory/);
     } finally {
       rmSync(linkedRoot, { force: true });
@@ -231,7 +246,7 @@ describe('SynterIntegrityGuard', () => {
       writeFileSync(join(fixtureDir, 'plugins', 'agent.growth.json.sig'), 'nested', 'utf-8');
       writeFileSync(join(fixtureDir, 'dist', 'runtime.js'), 'safe', 'utf-8');
       writeFileSync(join(fixtureDir, 'node_modules', 'dependency', 'index.js'), 'safe', 'utf-8');
-      const manifest = new SynterIntegrityGuard('test_master_key_123').generateManifest(fixtureDir);
+      const manifest = new SynterIntegrityGuard(TEST_SECRET).generateManifest(fixtureDir);
       assert.ok('plugins/agent.growth.json.sig' in manifest.fileHashes);
       assert.ok('dist/runtime.js' in manifest.fileHashes);
       assert.ok('node_modules/dependency/index.js' in manifest.fileHashes);
@@ -244,7 +259,7 @@ describe('SynterIntegrityGuard', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-integrity-'));
     try {
       writeFileSync(join(fixtureDir, 'agent.md'), 'safe', 'utf-8');
-      const guard = new SynterIntegrityGuard('test_master_key_123');
+      const guard = new SynterIntegrityGuard(TEST_SECRET);
       const manifest = JSON.parse(JSON.stringify(guard.generateManifest(fixtureDir)));
       writeFileSync(join(fixtureDir, 'toString'), 'untrusted', 'utf-8');
       const result = guard.verifyIntegrity(fixtureDir, manifest);
@@ -258,8 +273,8 @@ describe('SynterIntegrityGuard', () => {
 
 describe('SynterExecutionGuard', () => {
   it('should enforce the default single-step budget cap', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
-    const guard = new SynterExecutionGuard('test_master_key_123', {
+    const signer = new SynterAgentSigner(TEST_SECRET);
+    const guard = new SynterExecutionGuard(TEST_SECRET, {
       allowedActions: ['UNCAP_BUDGET']
     });
     const signed = signer.signPayload('agent-007', 4328, {
@@ -275,8 +290,8 @@ describe('SynterExecutionGuard', () => {
   });
 
   it('should enforce the 24 hour cumulative budget cap', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
-    const guard = new SynterExecutionGuard('test_master_key_123', {
+    const signer = new SynterAgentSigner(TEST_SECRET);
+    const guard = new SynterExecutionGuard(TEST_SECRET, {
       allowedActions: ['UNCAP_BUDGET']
     });
     const signed = signer.signPayload('agent-007', 4328, {
@@ -294,8 +309,8 @@ describe('SynterExecutionGuard', () => {
   });
 
   it('should fail closed on malformed budget actions and history', () => {
-    const signer = new SynterAgentSigner('test_master_key_123');
-    const guard = new SynterExecutionGuard('test_master_key_123', { allowedActions: ['UNCAP_BUDGET'] });
+    const signer = new SynterAgentSigner(TEST_SECRET);
+    const guard = new SynterExecutionGuard(TEST_SECRET, { allowedActions: ['UNCAP_BUDGET'] });
     const malformed = signer.signPayload('agent-007', 4328, {
       action: 'UNCAP_BUDGET', campaignId: 'pmax-1', currentBudget: '100', proposedBudget: 120
     });
@@ -313,20 +328,20 @@ describe('SynterExecutionGuard', () => {
 
   it('should reject malformed policies, custom malformed budget actions, and negative budgets', () => {
     assert.throws(
-      () => new SynterExecutionGuard('key', { allowedActions: [''] }),
+      () => new SynterExecutionGuard(TEST_SECRET, { allowedActions: [''] }),
       /non-empty strings/
     );
     assert.throws(
-      () => new SynterExecutionGuard('key', { allowedActions: [0] } as never),
+      () => new SynterExecutionGuard(TEST_SECRET, { allowedActions: [0] } as never),
       /non-empty strings/
     );
     assert.throws(
-      () => new SynterExecutionGuard('key', { allowedAction: ['TEST'] } as never),
+      () => new SynterExecutionGuard(TEST_SECRET, { allowedAction: ['TEST'] } as never),
       /unsupported field/
     );
 
-    const signer = new SynterAgentSigner('key');
-    const guard = new SynterExecutionGuard('key', {
+    const signer = new SynterAgentSigner(TEST_SECRET);
+    const guard = new SynterExecutionGuard(TEST_SECRET, {
       allowedActions: ['INCREASE_SPEND'], budgetMutationActions: ['INCREASE_SPEND']
     });
     const malformed = signer.signPayload('agent', 1, { action: 'INCREASE_SPEND' });
@@ -339,12 +354,12 @@ describe('SynterExecutionGuard', () => {
   });
 
   it('should make empty allowlists deny all and require explicit budget history', () => {
-    const signer = new SynterAgentSigner('key');
-    const denyAll = new SynterExecutionGuard('key', { allowedActions: [] });
+    const signer = new SynterAgentSigner(TEST_SECRET);
+    const denyAll = new SynterExecutionGuard(TEST_SECRET, { allowedActions: [] });
     const ordinary = signer.signPayload('agent', 1, { action: 'TEST' });
     assert.ok(denyAll.authorize(ordinary).violations.some((item) => item.includes('ACTION_NOT_ALLOWED')));
 
-    const guard = new SynterExecutionGuard('key', { allowedActions: ['UPDATE_BUDGET'] });
+    const guard = new SynterExecutionGuard(TEST_SECRET, { allowedActions: ['UPDATE_BUDGET'] });
     const increase = signer.signPayload('agent', 1, {
       action: 'UPDATE_BUDGET', campaignId: 'campaign', currentBudget: 100, proposedBudget: 110
     });
@@ -354,11 +369,16 @@ describe('SynterExecutionGuard', () => {
 });
 
 describe('SynterAuditTrail', () => {
+  it('should reject secrets shorter than 32 UTF-8 bytes', () => {
+    assert.throws(() => new SynterAuditTrail('a'.repeat(31)), /at least 32 UTF-8 bytes/);
+    assert.doesNotThrow(() => new SynterAuditTrail('雪'.repeat(11)));
+  });
+
   it('should detect tampering in the chained audit log', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-audit-'));
     try {
       const logPath = join(fixtureDir, 'audit.jsonl');
-      const trail = new SynterAuditTrail('test_master_key_123');
+      const trail = new SynterAuditTrail(TEST_SECRET);
       trail.appendEntry(logPath, {
         agentId: 'agent-007',
         organizationId: 4328,
@@ -392,7 +412,7 @@ describe('SynterAuditTrail', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-audit-'));
     try {
       const logPath = join(fixtureDir, 'audit.jsonl');
-      new SynterAuditTrail('correct-key').appendEntry(logPath, {
+      new SynterAuditTrail(CORRECT_AUDIT_SECRET).appendEntry(logPath, {
         agentId: 'agent-007',
         organizationId: 4328,
         action: 'UNCAP_BUDGET',
@@ -400,7 +420,7 @@ describe('SynterAuditTrail', () => {
         payload: { campaignId: 'pmax-1', proposedBudget: 120 }
       });
 
-      const verification = new SynterAuditTrail('wrong-key').verify(logPath);
+      const verification = new SynterAuditTrail(WRONG_AUDIT_SECRET).verify(logPath);
       assert.strictEqual(verification.valid, false);
       assert.ok(verification.violations.some((violation) => violation.includes('AUDIT_ENTRY_TAMPERED')));
     } finally {
@@ -412,7 +432,7 @@ describe('SynterAuditTrail', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-audit-'));
     try {
       const logPath = join(fixtureDir, 'audit.jsonl');
-      const trail = new SynterAuditTrail('correct-key');
+      const trail = new SynterAuditTrail(CORRECT_AUDIT_SECRET);
       writeFileSync(logPath, 'null\n', 'utf-8');
       assert.strictEqual(trail.verify(logPath).valid, false);
       assert.throws(() => trail.appendEntry(logPath, {
@@ -441,7 +461,7 @@ describe('SynterAuditTrail', () => {
     const fixtureDir = mkdtempSync(join(tmpdir(), 'synter-audit-'));
     try {
       const logPath = join(fixtureDir, 'audit.jsonl');
-      const trail = new SynterAuditTrail('correct-key');
+      const trail = new SynterAuditTrail(CORRECT_AUDIT_SECRET);
       trail.appendEntry(logPath, {
         agentId: 'agent', organizationId: 1, action: 'TEST', decision: 'allowed', payload: {}
       });

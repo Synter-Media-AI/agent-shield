@@ -31,7 +31,11 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run build && node --test dist/tests/shield.test.js",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "ai-agents",
@@ -50,7 +54,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Synter-Media-AI/agent-shield.git"
+    "url": "git+https://github.com/Synter-Media-AI/agent-shield.git"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

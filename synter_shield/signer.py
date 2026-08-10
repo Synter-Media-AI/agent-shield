@@ -16,8 +16,8 @@ class SynterAgentSigner:
     MAX_CLOCK_SKEW_SECONDS = 30
 
     def __init__(self, secret_key: str):
-        if not secret_key or not secret_key.strip():
-            raise ValueError("SynterAgentSigner requires a non-empty secret key.")
+        if not isinstance(secret_key, str) or len(secret_key.encode("utf-8")) < 32:
+            raise ValueError("SynterAgentSigner requires a secret key containing at least 32 UTF-8 bytes.")
         self._validate_unicode(secret_key)
         self.secret_key = secret_key.encode('utf-8')
 

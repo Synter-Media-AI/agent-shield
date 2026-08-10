@@ -14,8 +14,8 @@ class SynterIntegrityGuard:
     MANIFEST_VERSION = "2.0.0"
 
     def __init__(self, secret_key: str):
-        if not secret_key or not secret_key.strip():
-            raise ValueError("SynterIntegrityGuard requires a non-empty secret key.")
+        if not isinstance(secret_key, str) or len(secret_key.encode("utf-8")) < 32:
+            raise ValueError("SynterIntegrityGuard requires a secret key containing at least 32 UTF-8 bytes.")
         self.secret_key = secret_key.encode("utf-8")
 
     def generate_manifest(self, directory_path: str) -> Dict[str, object]:

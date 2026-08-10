@@ -14,6 +14,7 @@ All notable changes to this project should be documented in this file.
 - Made malformed budget actions and missing or malformed 24-hour budget history fail closed; empty action allowlists now deny every action.
 - Upgraded manifests to schema `2.0.0`, signed all recognized metadata, rejected unknown fields and unsafe roots, and protected every regular file except the generated root manifest.
 - Upgraded audit records to schema `2.0.0`, authenticated an existing chain before append, rejected malformed or empty ledgers, and added external checkpoints for detecting truncation and valid-prefix rollback.
+- Rejected HMAC secrets shorter than 32 UTF-8 bytes across signing, manifest, policy, and audit helpers.
 - Added CodeQL, Dependabot, package-install smoke tests, and supported-Python compatibility checks.
 
 ### Breaking

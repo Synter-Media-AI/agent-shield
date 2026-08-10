@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
@@ -34,7 +35,7 @@ jobs:
           cd /tmp/agent-shield-npm-smoke
           npm init -y
           npm install /tmp/agent-shield-npm/*.tgz
-          node --input-type=module -e "import { SynterAgentSigner } from '@synter/agent-shield'; if (!new SynterAgentSigner('smoke').signPayload('agent', 1, {}).signature) process.exit(1)"
+          node --input-type=module -e "import { SynterAgentSigner } from '@synter/agent-shield'; if (!new SynterAgentSigner('0123456789abcdef0123456789abcdef').signPayload('agent', 1, {}).signature) process.exit(1)"
           ./node_modules/.bin/agent-shield
 
       - name: Set up Python
@@ -59,7 +60,7 @@ jobs:
           python -m venv /tmp/agent-shield-python-smoke
           /tmp/agent-shield-python-smoke/bin/pip install dist/*.whl
           cd /tmp
-          /tmp/agent-shield-python-smoke/bin/python -c "from synter_shield import SynterAgentSigner; assert SynterAgentSigner('smoke').sign_payload('agent', 1, {})['signature']"
+          /tmp/agent-shield-python-smoke/bin/python -c "from synter_shield import SynterAgentSigner; assert SynterAgentSigner('0123456789abcdef0123456789abcdef').sign_payload('agent', 1, {})['signature']"
 
   python-compatibility:
     runs-on: ubuntu-latest

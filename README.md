@@ -54,6 +54,8 @@ pnpm add @synter/agent-shield
 pip install synter-agent-shield
 ```
 
+Use an independently generated secret containing at least 32 UTF-8 bytes. Load it from a secret manager, rotate it through a controlled migration, and never place it in source, command-line arguments, or logs.
+
 ---
 
 ## 🚀 Quickstart
