@@ -1,6 +1,6 @@
 {
   "name": "@synter/agent-shield",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Lightweight security helpers for signing, integrity manifests, prompt scanning, and execution policy checks",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,10 +22,8 @@
     "LICENSE",
     "CHANGELOG.md",
     "SECURITY.md",
-    "VERSIONING.md",
-    "vectors/*.json"
+    "VERSIONING.md"
   ],
-  "publishConfig": { "access": "public" },
   "bin": {
     "agent-shield": "bin/agent-shield.js",
     "synter-shield": "bin/agent-shield.js"
@@ -35,6 +33,9 @@
     "test": "npm run build && node --test dist/tests/shield.test.js",
     "prepack": "npm run build",
     "prepublishOnly": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "ai-agents",
@@ -59,7 +60,6 @@
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3"
   },
-  "dependencies": { "canonicalize": "^2.1.0" },
   "engines": {
     "node": ">=18.0.0"
   }

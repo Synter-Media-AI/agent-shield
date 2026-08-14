@@ -43,7 +43,7 @@ A **Card-Backed Trial Growth Agent**:
 
 ### Agent Shield Role
 - `SynterIntegrityGuard` signs the protected agent directory at compile time.
-- The runtime re-verifies the manifest before loading the skill files so modified prompts, injected code, missing files, or newly added protected files are detected.
+- The runtime re-verifies the manifest before loading the skill files so modified prompts, injected code, missing files, or newly added files are detected.
 - `SynterPromptSanitizer` can clean external copy before it enters the model context.
 
 ---
@@ -95,15 +95,15 @@ The agency builds client-specific Growth Agents in **Claude** or **OpenAI**, com
 ### Workflow
 ```bash
 # Compile Agency Client A Agent
-CLIENT_A_KEY_FILE=/run/secrets/client-a SYNTER_MASTER_KEY_FILE=$CLIENT_A_KEY_FILE npx @synter/agent-shield compile ./agents/client-a-growth
+SYNTER_MASTER_KEY="$CLIENT_A_KEY" npx @synter/agent-shield compile ./agents/client-a-growth
 
 # Compile Agency Client B Agent
-CLIENT_B_KEY_FILE=/run/secrets/client-b SYNTER_MASTER_KEY_FILE=$CLIENT_B_KEY_FILE npx @synter/agent-shield compile ./agents/client-b-growth
+SYNTER_MASTER_KEY="$CLIENT_B_KEY" npx @synter/agent-shield compile ./agents/client-b-growth
 ```
 
 ### Agent Shield Role
-- The compiler scans protected files for suspicious prompt-injection-like content.
-- The signed manifest lets the agency runtime verify that each client’s protected files match what was reviewed and shipped.
+- The compiler scans agent files for suspicious prompt-injection-like content.
+- The signed manifest lets the agency runtime verify that each client’s files match what was reviewed and shipped.
 - The runtime can pair each client workspace with its own signing key and policy configuration.
 
 ---

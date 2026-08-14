@@ -4,7 +4,7 @@ Agent Shield follows semantic versioning for its documented public APIs.
 
 ## Stable Surface
 
-The following are considered the stable public surface in `1.x`:
+The following are considered the stable public surface in `2.x`:
 
 - exported TypeScript symbols from `src/index.ts`;
 - exported Python symbols from `synter_shield.__init__`;
@@ -33,5 +33,14 @@ The following require a major version bump:
 
 - Pin exact versions if your runtime depends on specific sanitizer findings or violation text.
 - Prefer consuming structured fields over parsing human-readable error strings.
-- Envelope and manifest `schema_version` are `"1.0"` and are independent of package version `1.0.0`.
-- Wire fields, JCS/domain bytes, signature encoding, 30-second future skew, JSON limits, and default budget-action semantics are compatibility-sensitive and require a major release to change incompatibly.
+- TypeScript and Python intent signatures share the `synter.intent.v2` wire protocol and golden test vectors. Their public envelope field names remain idiomatic to each language.
+- Manifest and audit JSON field names are language-specific and are not interchangeable between TypeScript and Python.
+
+## Migrating From 1.x
+
+Version 2 intentionally does not treat version 1 artifacts as authenticated version 2 data:
+
+1. deploy version 2 verifiers before accepting new version 2 intents;
+2. regenerate every skill manifest with version 2;
+3. archive version 1 audit logs read-only and begin a new version 2 ledger;
+4. persist each version 2 audit checkpoint in durable storage outside the local ledger if truncation detection is required.

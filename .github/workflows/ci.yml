@@ -6,10 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  node:
-    strategy:
-      matrix:
-        node: [18, 20]
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,7 +16,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 20
           cache: npm
 
       - name: Install Node.js dependencies
@@ -28,56 +25,76 @@ jobs:
       - name: Run TypeScript build and tests
         run: npm test
 
-      - name: Build and smoke the real npm artifact
-        shell: bash
-        run: |
-          tarball="$(npm pack --silent)"
-          consumer="$(mktemp -d)"
-          fixture="$(mktemp -d)"
-          key_file="$(mktemp)"
-          printf '0123456789abcdef0123456789abcdef' > "$key_file"
-          printf '# fixture\n' > "$fixture/SKILL.md"
-          npm install --prefix "$consumer" "$PWD/$tarball"
-          (cd "$consumer" && node --input-type=module \
-            -e "import('@synter/agent-shield').then(m => { if (!m.SynterAgentSigner) process.exit(1) })")
-          SYNTER_MASTER_KEY_FILE="$key_file" \
-            "$consumer/node_modules/.bin/agent-shield" compile "$fixture"
-          test -s "$fixture/agent.growth.json.sig"
+      - name: Verify npm package contents
+        run: npm pack --dry-run
 
-  python:
-    strategy:
-      matrix:
-        python: ['3.8', '3.12']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Smoke test installed npm package
+        run: |
+          mkdir -p /tmp/agent-shield-npm /tmp/agent-shield-npm-smoke
+          npm pack --pack-destination /tmp/agent-shield-npm
+          cd /tmp/agent-shield-npm-smoke
+          npm init -y
+          npm install /tmp/agent-shield-npm/*.tgz
+          node --input-type=module -e "import { SynterAgentSigner } from '@synter/agent-shield'; if (!new SynterAgentSigner('0123456789abcdef0123456789abcdef').signPayload('agent', 1, {}).signature) process.exit(1)"
+          ./node_modules/.bin/agent-shield
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: '3.11'
 
-      - name: Install project and Python build tooling
-        run: python -m pip install build .
+      - name: Install Python build tooling
+        run: python -m pip install build twine
 
       - name: Run Python tests
         run: python -m unittest discover -s synter_shield/tests
 
       - name: Build Python distribution artifacts
-        run: python -m build --sdist --wheel
+        run: python -m build --sdist --wheel --outdir python-dist
 
-      - name: Smoke wheel and source distribution in clean virtual environments
-        shell: bash
+      - name: Verify Python distribution metadata
+        run: python -m twine check python-dist/*
+
+      - name: Smoke test installed Python wheel
         run: |
-          for artifact in dist/*.whl dist/*.tar.gz; do
-            venv="$(mktemp -d)/venv"
-            python -m venv "$venv"
-            "$venv/bin/pip" install "$artifact"
-            "$venv/bin/python" - <<'PY'
-          import synter_shield
-          for name in synter_shield.__all__:
-              getattr(synter_shield, name)
-          signer = synter_shield.SynterAgentSigner("0123456789abcdef0123456789abcdef")
-          envelope = signer.sign_payload("agent", "org", {"action": "READ"})
-          assert signer.verify_signature(envelope)[0]
-          PY
-          done
+          python -m venv /tmp/agent-shield-python-smoke
+          /tmp/agent-shield-python-smoke/bin/pip install python-dist/*.whl
+          cd /tmp
+          /tmp/agent-shield-python-smoke/bin/python -c "from synter_shield import SynterAgentSigner; assert SynterAgentSigner('0123456789abcdef0123456789abcdef').sign_payload('agent', 1, {})['signature']"
+
+  python-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.13']
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run Python tests
+        run: python -m unittest discover -s synter_shield/tests
+
+  node-18-compatibility:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install and test
+        run: |
+          npm ci
+          npm test

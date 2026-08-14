@@ -9,4 +9,4 @@ export {
   type ExecutionPolicy,
   type ExecutionPolicyContext
 } from './policy.js';
-export { SynterAuditTrail, type AuditTrailEntry } from './audit.js';
+export { SynterAuditTrail, type AuditCheckpoint, type AuditTrailEntry } from './audit.js';
